@@ -278,3 +278,7 @@ attestations, and publish a GitHub release. `gh extension install` and
 | `categorize.go`      | Flattening PRs and the rules that place them in sections               |
 | `render.go`          | Terminal output                                                        |
 | `categorize_test.go` | Section rules, failing-check detection, flags and truncation           |
+
+## License
+
+[MIT](LICENSE)
