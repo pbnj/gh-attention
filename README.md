@@ -50,11 +50,17 @@ This downloads the prebuilt binary for your platform from the latest
 `gh extension upgrade attention`.
 
 Each release binary carries a signed build-provenance attestation, so you can
-check that GitHub Actions built it from this repo:
+check that GitHub Actions built it from this repo. Verify the asset for your
+platform (`darwin-arm64`, `linux-amd64`, `windows-amd64.exe`, …) as downloaded:
 
 ```sh
-gh attestation verify ~/.local/share/gh/extensions/gh-attention/gh-attention -R pbnj/gh-attention
+gh release download -R pbnj/gh-attention -p darwin-arm64 -D /tmp
+gh attestation verify /tmp/darwin-arm64 -R pbnj/gh-attention
 ```
+
+Verify the download, not the installed copy. On macOS the installed binary is
+re-signed during install, so its hash no longer matches the attestation and
+verification fails with `HTTP 404`.
 
 ### From source
 
