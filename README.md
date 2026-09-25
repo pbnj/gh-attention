@@ -274,18 +274,30 @@ never committed.
 
 ### Releasing
 
-Push a version tag:
+Releases are cut by
+[release-please](https://github.com/googleapis/release-please). Every push to
+`main` opens or updates a release PR that bumps the version from the
+Conventional Commit types since the last release and updates `CHANGELOG.md`:
 
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
+| Commit type                                  | Bump                  |
+| -------------------------------------------- | --------------------- |
+| `feat`                                       | minor (0.1.0 → 0.2.0) |
+| `fix`, `perf`, `revert`                      | patch (0.1.0 → 0.1.1) |
+| `!` after the type, or `BREAKING CHANGE:`    | major (minor pre-1.0) |
+| `docs`, `chore`, `ci`, `test`, `refactor`, … | none on their own     |
 
+Merging the release PR tags the commit and creates the GitHub release.
 `.github/workflows/release.yml` then uses
 [`cli/gh-extension-precompile`](https://github.com/cli/gh-extension-precompile)
 to build a binary for every platform gh supports, attach build-provenance
-attestations, and publish a GitHub release. `gh extension install` and
+attestations, and upload them to the release. `gh extension install` and
 `gh extension upgrade` pick up the new release.
+
+The release PR is opened with `GITHUB_TOKEN`, so CI doesn't run on it. It only
+touches `CHANGELOG.md` and `.release-please-manifest.json`.
+
+To force a specific version, add a `Release-As: 1.0.0` line to a commit
+message body on `main`.
 
 | File                 | Purpose                                                                |
 | -------------------- | ---------------------------------------------------------------------- |

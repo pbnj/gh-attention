@@ -1,33 +1,55 @@
 name: release
 
-# Pushing a version tag (e.g. v0.1.0) builds a binary for every platform gh
-# supports and publishes them as a GitHub release, which is what
-# `gh extension install pbnj/gh-attention` downloads.
+# Every push to main updates a release PR that release-please derives from the
+# Conventional Commit types since the last release (feat → minor, fix → patch)
+# and that carries the CHANGELOG. Merging that PR tags the commit and creates
+# the GitHub release; the build job then attaches a binary for every platform gh
+# supports, which is what `gh extension install pbnj/gh-attention` downloads.
+#
+# The build runs here rather than on the tag push, because a tag created with
+# GITHUB_TOKEN doesn't trigger other workflows.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
 permissions: {}
 
-# Never cancel a release mid-upload; queue a second tag behind it instead.
+# Never cancel a release mid-upload; queue the next push behind it instead.
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: build and publish binaries
+  release-please:
+    name: release PR and tag
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create the release and upload binaries
+      contents: write # tag and create the release
+      pull-requests: write # open and update the release PR
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+
+  build:
+    name: build and publish binaries
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload binaries to the release
       id-token: write # sign the build-provenance attestations
       attestations: write # store them, for `gh attestation verify`
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
           persist-credentials: false
       - uses: cli/gh-extension-precompile@76961aa3bd1123d0a6fd42d0a41aca0696937c39 # v2.2.0
         with:
+          release_tag: ${{ needs.release-please.outputs.tag_name }}
           # Latest 1.27 patch rather than go.mod's 1.25.0 floor, so releases
           # always ship the newest standard-library security fixes.
           go_version: "1.27.x"
