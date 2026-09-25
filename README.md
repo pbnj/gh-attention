@@ -101,6 +101,7 @@ gh attention [flags]
 | ------------------------ | ---------------------------------------------- |
 | `-o, --org ORG`          | Only PRs in this organization (repeatable)     |
 | `-R, --repo OWNER/REPO`  | Only PRs in this repository (repeatable)       |
+| `-A, --all`              | Every repository, even inside a git repository |
 | `-a, --author USER`      | Inspect PRs authored by `USER` (default `@me`) |
 | `-r, --reviews`          | Also list PRs where your review is requested   |
 | `-s, --section SECTIONS` | Comma-separated sections to show (see below)   |
@@ -108,11 +109,19 @@ gh attention [flags]
 | `--json`                 | Print categorized JSON instead of text         |
 | `-h, --help`             | Show help                                      |
 
+Run inside a git repository with a GitHub remote, `gh attention` lists only
+that repository's PRs. Anywhere else, it lists PRs across every repository you
+can see. `-o`, `-R` and `--all` override this. The current repository is the one
+`gh repo view` reports, so `gh repo set-default` applies.
+
 ### Examples
 
 ```sh
-# Everything that needs you, across every repo you can see
+# What needs you in the current repo (inside a checkout), or everywhere (outside one)
 gh attention
+
+# Everything that needs you, across every repo you can see, even inside a checkout
+gh attention --all
 
 # One org, including PRs waiting on your review
 gh attention -o octo-org -r
@@ -185,7 +194,8 @@ gh attention --json | jq '[.[][]] | unique_by(.url) | length'   # distinct PRs n
 gh-attention uses GitHub's GraphQL API in two steps:
 
 1. A search (`is:pr is:open archived:false author:<you>`, plus any `org:` and
-   `repo:` qualifiers) that returns only PR ids. This is cheap.
+   `repo:` qualifiers, or the current repository) that returns only PR ids.
+   This is cheap.
 2. The review and CI details for those ids, fetched in batches of 20, with up
    to 4 requests at a time.
 

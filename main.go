@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cli/go-gh/v2"
 	"github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/term"
 	flag "github.com/spf13/pflag"
@@ -25,8 +26,12 @@ USAGE
 
 FLAGS
 %s
+Inside a git repository with a GitHub remote, only that repository's PRs are
+listed; elsewhere, PRs across every repository. -o, -R and --all override this.
+
 EXAMPLES
   gh attention
+  gh attention --all
   gh attention -o octo-org -r
   gh attention -s failing,feedback
   gh attention --json | jq '.failing[].url'
@@ -34,6 +39,7 @@ EXAMPLES
 
 type options struct {
 	orgs, repos   []string
+	all           bool
 	author        string
 	reviews       bool
 	sections      []string
@@ -61,6 +67,8 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	opts.repos = defaultRepos(opts, currentRepo)
 
 	scope := []string{"is:pr", "is:open", "archived:false"}
 	for _, o := range opts.orgs {
@@ -129,6 +137,7 @@ func parseFlags(args []string) (options, error) {
 	fs.SortFlags = false
 	fs.StringArrayVarP(&opts.orgs, "org", "o", nil, "Only PRs in this `ORG` (repeatable)")
 	fs.StringArrayVarP(&opts.repos, "repo", "R", nil, "Only PRs in this `OWNER/REPO` (repeatable)")
+	fs.BoolVarP(&opts.all, "all", "A", false, "Search every repository, even inside a git repository")
 	fs.StringVarP(&opts.author, "author", "a", "@me", "Inspect PRs authored by `USER`")
 	fs.BoolVarP(&opts.reviews, "reviews", "r", false, "Also list PRs where your review is requested")
 	fs.StringSliceVarP(&opts.sections, "section", "s", nil,
@@ -142,6 +151,9 @@ func parseFlags(args []string) (options, error) {
 	}
 	if fs.NArg() > 0 {
 		return opts, fmt.Errorf("unexpected argument: %s", fs.Arg(0))
+	}
+	if opts.all && (len(opts.orgs) > 0 || len(opts.repos) > 0) {
+		return opts, errors.New("--all can't be combined with --org or --repo")
 	}
 	opts.includeDrafts = !noDrafts
 
@@ -165,4 +177,29 @@ func parseFlags(args []string) (options, error) {
 		opts.sections = slices.DeleteFunc(slices.Clone(allSections), func(s string) bool { return !slices.Contains(want, s) })
 	}
 	return opts, nil
+}
+
+// defaultRepos scopes the search to the current repository when no scope was
+// given. Outside a git repository, or one without a GitHub remote, current
+// fails and the search spans every repository.
+func defaultRepos(opts options, current func() (string, error)) []string {
+	if opts.all || len(opts.orgs) > 0 || len(opts.repos) > 0 {
+		return opts.repos
+	}
+	r, err := current()
+	if err != nil {
+		return nil
+	}
+	return []string{r}
+}
+
+// currentRepo asks gh for the current repository rather than using go-gh's
+// repository.Current, which ignores scp-style remotes without a user (e.g. an
+// SSH alias like "work:owner/repo"). gh also honors GH_REPO and set-default.
+func currentRepo() (string, error) {
+	stdout, _, err := gh.Exec("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(stdout.String()), nil
 }
