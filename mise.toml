@@ -1,0 +1,80 @@
+[tools]
+go = "1.27.1"
+betterleaks = "1.8.1"
+golangci-lint = "2.14.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.8.0"
+# Node runs the npm-based docs tools below.
+node = "24.21.0"
+oxfmt = "0.70.0"
+markdownlint-cli2 = "0.23.3"
+
+[tasks.test]
+description = "Run unit tests"
+run = "go test ./..."
+
+[tasks.build]
+description = "Build the gh-attention binary"
+sources = ["go.mod", "go.sum", "*.go"]
+outputs = ["gh-attention"]
+run = "go build -o gh-attention ."
+
+[tasks.install]
+description = "Build and install as a local gh extension"
+depends = ["build"]
+run = "scripts/install-extension"
+
+[tasks.secrets]
+description = "Scan the working tree and git history for secrets"
+run = [
+  "betterleaks dir --no-banner --redact --verbose .",
+  # A fresh repo has no history to scan yet.
+  "if git rev-parse -q --verify HEAD >/dev/null; then betterleaks git --no-banner --redact --verbose .; fi",
+]
+
+[tasks.keywords]
+description = "Check tracked and untracked files for forbidden keywords"
+run = "scripts/check-keywords"
+
+[tasks.lint]
+description = "Lint Go code and docs"
+depends = ["lint:go", "lint:docs"]
+
+[tasks."lint:go"]
+description = "Lint and run static security analysis (golangci-lint, including gosec)"
+run = "golangci-lint run ./..."
+
+[tasks."lint:docs"]
+description = "Lint Markdown (markdownlint) and check its formatting (oxfmt)"
+run = ["markdownlint-cli2", "oxfmt --check '**/*.md'"]
+
+[tasks.fmt]
+description = "Format Go code and docs"
+depends = ["fmt:go", "fmt:docs"]
+
+[tasks."fmt:go"]
+description = "Format Go code (gofmt via golangci-lint)"
+run = "golangci-lint fmt"
+
+[tasks."fmt:docs"]
+description = "Format Markdown (oxfmt), then apply markdownlint's fixes"
+run = ["oxfmt '**/*.md'", "markdownlint-cli2 --fix"]
+
+[tasks.vuln]
+description = "Check dependencies and the Go toolchain for known vulnerabilities"
+run = "govulncheck ./..."
+
+[tasks.pre-commit]
+description = "Run every pre-commit check against the staged changes"
+depends = ["pre-commit:secrets", "pre-commit:keywords", "lint"]
+
+[tasks."pre-commit:secrets"]
+hide = true
+run = "betterleaks git --pre-commit --staged --no-banner --redact --verbose ."
+
+[tasks."pre-commit:keywords"]
+hide = true
+run = "scripts/check-keywords --staged"
+
+[tasks."hooks:install"]
+description = "Install the git pre-commit hook"
+run = "mise generate git-pre-commit --write --task=pre-commit"

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#
+# Fail if any file, or any file name, contains a forbidden keyword.
+#
+# Keywords come from .forbidden-keywords at the repo root: one per line,
+# case-insensitive, fixed strings; blank lines and # comments are ignored.
+# The file is gitignored on purpose, since committing it would publish the
+# very words it exists to keep out.
+#
+#   check-keywords           scan tracked and untracked (non-ignored) files
+#   check-keywords --staged  scan only what is staged, i.e. what a commit would record
+
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+list="$root/.forbidden-keywords"
+
+if [[ ! -f "$list" ]]; then
+  echo "check-keywords: $list not found." >&2
+  echo "Create it with one keyword per line (an empty file disables the check)." >&2
+  exit 1
+fi
+
+patterns=$(mktemp)
+trap 'rm -f "$patterns"' EXIT
+grep -vE '^[[:space:]]*(#|$)' "$list" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' >"$patterns" || true
+if [[ ! -s "$patterns" ]]; then
+  exit 0
+fi
+
+case "${1:-}" in
+  --staged) scope=(--cached) ;;
+  "") scope=(--untracked) ;;
+  *) echo "usage: check-keywords [--staged]" >&2; exit 2 ;;
+esac
+
+found=0
+
+# File contents. -I skips binaries; -F/-i treat each line as a literal, case-insensitive.
+if git -C "$root" grep --no-color -n -I -i -F -f "$patterns" "${scope[@]}"; then
+  found=1
+fi
+
+# File names.
+if [[ "${scope[0]}" == --cached ]]; then
+  files=$(git -C "$root" diff --cached --name-only --diff-filter=ACR)
+else
+  files=$(git -C "$root" ls-files --cached --others --exclude-standard)
+fi
+if names=$(grep -i -F -f "$patterns" <<<"$files"); then
+  while IFS= read -r name; do echo "file name: $name"; done <<<"$names"
+  found=1
+fi
+
+if ((found)); then
+  echo >&2
+  echo "check-keywords: forbidden keywords found (listed in .forbidden-keywords)." >&2
+  exit 1
+fi

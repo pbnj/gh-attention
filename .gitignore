@@ -1,0 +1,8 @@
+# Built binary
+/gh-attention
+
+# Private keyword blocklist for scripts/check-keywords
+/.forbidden-keywords
+
+# Local mise overrides
+mise.local.toml

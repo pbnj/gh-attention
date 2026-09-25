@@ -1,0 +1,34 @@
+name: release
+
+# Pushing a version tag (e.g. v0.1.0) builds a binary for every platform gh
+# supports and publishes them as a GitHub release, which is what
+# `gh extension install pbnj/gh-attention` downloads.
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+# Never cancel a release mid-upload; queue a second tag behind it instead.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: build and publish binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and upload binaries
+      id-token: write # sign the build-provenance attestations
+      attestations: write # store them, for `gh attestation verify`
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cli/gh-extension-precompile@76961aa3bd1123d0a6fd42d0a41aca0696937c39 # v2.2.0
+        with:
+          # Latest 1.27 patch rather than go.mod's 1.25.0 floor, so releases
+          # always ship the newest standard-library security fixes.
+          go_version: "1.27.x"
+          generate_attestations: true

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# Install this checkout as a local gh extension. gh symlinks the directory, so
+# once installed a rebuild is all it takes to pick up changes. Re-running is safe.
+
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+if out=$(gh extension install . 2>&1); then
+  echo "Installed: gh attention -> $root"
+  exit 0
+fi
+
+if [[ "$out" != *"already an installed extension"* ]]; then
+  echo "$out" >&2
+  exit 1
+fi
+
+# Already installed: make sure it is this checkout, not another copy.
+link="${GH_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/gh}/extensions/gh-attention"
+if [[ -d "$link" && "$(cd "$link" && pwd -P)" == "$(pwd -P)" ]]; then
+  echo "Already installed from this checkout; rebuilt binary is live."
+else
+  echo "gh attention is already installed from somewhere else ($link)." >&2
+  echo "Run 'gh extension remove attention', then re-run this task." >&2
+  exit 1
+fi

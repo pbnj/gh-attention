@@ -1,0 +1,9 @@
+{
+  "config": {
+    // oxfmt owns formatting (it follows Prettier), so turn off the rules
+    // that conflict with a Prettier-style formatter.
+    "extends": "markdownlint/style/prettier"
+  },
+  "globs": ["**/*.md"],
+  "gitignore": true
+}
