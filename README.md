@@ -1,14 +1,14 @@
 # gh-attention
 
-A [GitHub CLI](https://cli.github.com/) extension that lists your open pull
+A [GitHub CLI](https://cli.github.com/) extension that lists the open pull
 requests that need your attention:
 
-1. **Approved, not merged**
-2. **Pending reviewer approval**
+1. **Approved, not merged**: your PRs that are ready to merge
+2. **Pending reviewer approval**: your PRs waiting on reviewers
 3. **Unresolved PR feedback**: changes requested, or unresolved review threads
-4. **Failing CI checks**
-
-Optionally, it also lists PRs where **your review is requested**.
+   on your PRs
+4. **Failing CI checks**: your PRs with failing checks
+5. **Your review requested**: other people's PRs waiting on your review
 
 ```text
 ✔ Approved, not merged (1)
@@ -28,6 +28,10 @@ Optionally, it also lists PRs where **your review is requested**.
 ✘ Failing CI checks (1)
   octo-org/infra#77  chore: bump terraform aws provider to 6.x                     4d    lint / tflint, plan (staging)
     https://github.com/octo-org/infra/pull/77
+
+👀 Your review requested (1)
+  octo-org/api#490   fix: retry idempotent order writes on 409                     2h    from hubot
+    https://github.com/octo-org/api/pull/490
 ```
 
 ## Requirements
@@ -103,16 +107,20 @@ gh attention [flags]
 | `-R, --repo OWNER/REPO`  | Only PRs in this repository (repeatable)       |
 | `-A, --all`              | Every repository, even inside a git repository |
 | `-a, --author USER`      | Inspect PRs authored by `USER` (default `@me`) |
-| `-r, --reviews`          | Also list PRs where your review is requested   |
 | `-s, --section SECTIONS` | Comma-separated sections to show (see below)   |
 | `--no-drafts`            | Exclude draft PRs                              |
 | `--json`                 | Print categorized JSON instead of text         |
+| `--config PATH`          | Read settings only from this file              |
+| `--apply`                | Run the actions in your config's rules         |
 | `-h, --help`             | Show help                                      |
 
 Run inside a git repository with a GitHub remote, `gh attention` lists only
 that repository's PRs. Anywhere else, it lists PRs across every repository you
 can see. `-o`, `-R` and `--all` override this. The current repository is the one
 `gh repo view` reports, so `gh repo set-default` applies.
+
+Default flags, and rules that act on PRs, can be set in a
+[config file](#configuration).
 
 ### Examples
 
@@ -123,8 +131,11 @@ gh attention
 # Everything that needs you, across every repo you can see, even inside a checkout
 gh attention --all
 
-# One org, including PRs waiting on your review
-gh attention -o octo-org -r
+# One org
+gh attention -o octo-org
+
+# Only your own PRs, without the PRs waiting on your review
+gh attention -s approved,review,feedback,failing
 
 # Just one repo
 gh attention -R octo-org/api
@@ -148,7 +159,7 @@ Each section is sorted by most recently updated first.
 | ◷ Pending reviewer approval | `review`      | Review is required or reviewers are requested, it isn't approved, and no one requested changes. Drafts are excluded.                                                 | Pending reviewers and teams                               |
 | ✎ Unresolved PR feedback    | `feedback`    | Changes are requested, or it has at least one unresolved review thread.                                                                                              | Who requested changes; unresolved thread count            |
 | ✘ Failing CI checks         | `failing`     | The latest commit's combined check status is failing or errored.                                                                                                     | Names of the failing checks                               |
-| 👀 Your review requested    | `requested`   | Your review is requested, directly or through a team. Shown with `-r`, or when named in `-s`.                                                                        | PR author                                                 |
+| 👀 Your review requested    | `requested`   | Your review is requested, directly or through a team. Hidden only when `-s` leaves it out.                                                                           | PR author                                                 |
 
 Drafts are included by default, marked `[draft]`; `--no-drafts` hides them.
 
@@ -175,7 +186,10 @@ Drafts are included by default, marked `[draft]`; `--no-drafts` hides them.
       "pendingReviewers": [],
       "unresolvedThreads": 0,
       "ciState": "FAILURE",
-      "failingChecks": ["lint / tflint", "plan (staging)"]
+      "failingChecks": ["lint / tflint", "plan (staging)"],
+      "autoMerge": false,
+      "rules": [],
+      "actions": []
     }
   ]
 }
@@ -183,21 +197,109 @@ Drafts are included by default, marked `[draft]`; `--no-drafts` hides them.
 
 `reviewDecision` and `ciState` are `null` when GitHub has no value for them,
 for example in a repo with no required reviews or on a PR with no checks.
+`rules` names the [config rules](#rules) that matched the PR in that section,
+and `actions` lists what they run on it. With `--json`, the rule actions report
+goes to stderr, so stdout stays valid JSON.
 
 ```sh
 gh attention --json | jq -r '.failing[].url'
 gh attention --json | jq '[.[][]] | unique_by(.url) | length'   # distinct PRs needing attention
 ```
 
+## Configuration
+
+gh-attention reads YAML settings from these files, each layered over the one
+before. Command-line flags override them all.
+
+1. `~/.config/gh-attention/config.yaml`, or
+   `$XDG_CONFIG_HOME/gh-attention/config.yaml` when that variable is set.
+2. Inside a git checkout, the repository's `.github/attention.yaml`.
+
+`--config PATH` or `GH_ATTENTION_CONFIG=PATH` replaces both: only that file is
+read, and it must exist. Missing files are otherwise skipped, and an unknown key
+is an error, so typos don't go unnoticed.
+
+Every key is optional:
+
+| Key        | Same as                  | Example               |
+| ---------- | ------------------------ | --------------------- |
+| `sections` | `-s`                     | `[feedback, failing]` |
+| `orgs`     | `-o`                     | `[octo-org]`          |
+| `repos`    | `-R`                     | `[octo-org/api]`      |
+| `all`      | `--all`                  | `true`                |
+| `author`   | `-a`                     | `"@me"`               |
+| `drafts`   | `--no-drafts` (inverted) | `false`               |
+| `rules`    |                          | See [Rules](#rules)   |
+
+`orgs`, `repos` and `all` are the search scope and are replaced together: a
+scope flag such as `-R` replaces the whole configured scope. They can only be
+set in your own config file, not in a repository's `.github/attention.yaml`.
+A configured scope works like the flags, so it applies even inside a checkout.
+
+To see only the problems you can fix yourself, everywhere:
+
+```yaml
+# ~/.config/gh-attention/config.yaml
+sections: [feedback, failing]
+```
+
+### Rules
+
+A rule picks PRs in one section and names actions to run on them. Actions run
+only with `--apply`. Without it, gh-attention lists what it would do under
+**⚙ Rule actions (dry run)**.
+
+```yaml
+rules:
+  - name: dependency-bots
+    section: requested
+    match:
+      authors: [dependabot, snyk-bot]
+      repos: ["octo-org/*"]
+    actions: [approve-workflows, approve, auto-merge]
+    merge_method: squash
+```
+
+```sh
+gh attention            # lists the matching PRs and the actions it would run
+gh attention --apply    # runs them
+```
+
+| Key             | Meaning                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `name`          | Shown next to matching PRs and in the actions report. Defaults to `rule N`.                                                     |
+| `section`       | The section whose PRs the rule looks at. Rules only see sections that are shown, so `-s failing` skips a `requested` rule.      |
+| `match.authors` | PR author globs, case-insensitive. `dependabot`, `app/dependabot` and `dependabot[bot]` are the same. Required for `requested`. |
+| `match.repos`   | Optional `OWNER/REPO` globs, such as `octo-org/*`.                                                                              |
+| `actions`       | Any of `approve-workflows`, `approve` and `auto-merge`. They run in that order, whatever order you list them in.                |
+| `merge_method`  | `merge`, `squash` (default) or `rebase`, used by `auto-merge`.                                                                  |
+
+| Action              | What it does                                                                                                     | Skipped when             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `approve-workflows` | Approves the head commit's workflow runs that are waiting for approval (`action_required`), so CI runs.          | No run is waiting        |
+| `approve`           | Submits an approving review. Only allowed in `requested`, because GitHub doesn't let you approve your own PRs.   | You've already approved  |
+| `auto-merge`        | Enables auto-merge, so GitHub merges the PR once its requirements are met. The repository must allow auto-merge. | Auto-merge is already on |
+
+Draft PRs never match a rule. When several rules name the same action for a PR,
+it runs once. A failed action doesn't stop the others; gh-attention exits with
+status 1 after trying them all.
+
+Rules in a repository's `.github/attention.yaml` only apply to that repository:
+their `match.repos` is replaced with the current repository, so a file someone
+commits can't act on PRs elsewhere. The file also can't set `orgs`, `repos` or
+`all`, which would widen the search your own rules run over. The actions report
+names the file each rule came from.
+
 ## How it works
 
 gh-attention uses GitHub's GraphQL API in two steps:
 
-1. A search (`is:pr is:open archived:false author:<you>`, plus any `org:` and
-   `repo:` qualifiers, or the current repository) that returns only PR ids.
-   This is cheap.
+1. Searches that return only PR ids, which is cheap. One finds your PRs
+   (`is:pr is:open archived:false author:<you>`, plus any `org:` and `repo:`
+   qualifiers, or the current repository). When the `requested` section is
+   shown, a second search with `review-requested:@me` runs alongside it.
 2. The review and CI details for those ids, fetched in batches of 20, with up
-   to 4 requests at a time.
+   to 4 requests at a time across both searches.
 
 The review decision and CI status are the expensive fields. GitHub computes
 them per PR on every request, so asking for them in a large search page runs
@@ -205,15 +307,27 @@ into GitHub's ~10s GraphQL timeout. Batching keeps each request around 4–5s.
 Requests that still time out (a 502/504, or an empty 200 response) are retried
 up to 3 times with backoff.
 
-A run takes about 6–8s for ~65 open PRs.
+A run takes about 6–8s for ~65 open PRs. Leaving `requested` out of `-s` skips
+the second search.
+
+With `--apply`, rule actions run after the PRs are categorized, one PR at a
+time: workflow runs through the REST API (`GET …/actions/runs`, then
+`POST …/runs/{id}/approve`), reviews and auto-merge through the GraphQL
+mutations `addPullRequestReview` and `enablePullRequestAutoMerge`. Mutations
+aren't retried, because a request that timed out may still have gone through.
 
 ## Troubleshooting
 
-| Message                                                                | Cause                                                                                                                     |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `HTTP 403: You have exceeded a secondary rate limit`                   | Too many heavy GraphQL requests in a short time, usually from running the tool repeatedly in a loop. Wait about a minute. |
-| `HTTP 502` / `HTTP 504` / `unexpected end of JSON input` after retries | GitHub is timing out or degraded. Try again, or narrow the scope with `-o` or `-R`.                                       |
-| `unknown section "…"`                                                  | `-s` accepts only `approved`, `review`, `feedback`, `failing` and `requested`.                                            |
+| Message                                                                | Cause                                                                                                                                     |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `HTTP 403: You have exceeded a secondary rate limit`                   | Too many heavy GraphQL requests in a short time, usually from running the tool repeatedly in a loop. Wait about a minute.                 |
+| `HTTP 502` / `HTTP 504` / `unexpected end of JSON input` after retries | GitHub is timing out or degraded. Try again, or narrow the scope with `-o` or `-R`.                                                       |
+| `unknown section "…"`                                                  | `-s` accepts only `approved`, `review`, `feedback`, `failing` and `requested`.                                                            |
+| `unknown shorthand flag: 'r'` / `unknown flag: --reviews`              | `-r` was removed: review requests are shown by default. Drop the flag, and use `-s` to hide them.                                         |
+| `config.yaml: …` or `.github/attention.yaml: …`                        | The config file has an unknown key or an invalid value. The message names the key or rule. `reviews:` was removed; use `sections:`.       |
+| `.github/attention.yaml: orgs, repos and all can only be set in…`      | A repository's file can't change the search scope. Move the setting to your own config file, or pass `-o`, `-R` or `--all`.               |
+| `✘ auto-merge …: Auto merge is not allowed for this repository`        | Turn on **Allow auto-merge** in the repository's settings, or remove `auto-merge` from the rule for that repository.                      |
+| `✘ approve-workflows …: HTTP 403` / `HTTP 404`                         | Your token needs write access to Actions in that repository, or the run can't be approved (only some runs, such as ones from forks, can). |
 
 ## Development
 
@@ -299,13 +413,16 @@ touches `CHANGELOG.md` and `.release-please-manifest.json`.
 To force a specific version, add a `Release-As: 1.0.0` line to a commit
 message body on `main`.
 
-| File                 | Purpose                                                                |
-| -------------------- | ---------------------------------------------------------------------- |
-| `main.go`            | Flag parsing and the concurrent authored and review-requested searches |
-| `github.go`          | GraphQL queries, batching, concurrency limit and retries               |
-| `categorize.go`      | Flattening PRs and the rules that place them in sections               |
-| `render.go`          | Terminal output                                                        |
-| `categorize_test.go` | Section rules, failing-check detection, flags and truncation           |
+| File            | Purpose                                                              |
+| --------------- | -------------------------------------------------------------------- |
+| `main.go`       | Flag parsing, merging config with flags, and the concurrent searches |
+| `config.go`     | Loading, validating and layering the config files                    |
+| `github.go`     | GraphQL queries, batching, concurrency limit and retries             |
+| `categorize.go` | Flattening PRs and the rules that place them in sections             |
+| `rules.go`      | Matching config rules to PRs and planning and running their actions  |
+| `actions.go`    | The GitHub calls behind rule actions                                 |
+| `render.go`     | Terminal output                                                      |
+| `*_test.go`     | Unit tests for each of the above                                     |
 
 ## License
 

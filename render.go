@@ -75,12 +75,60 @@ func (r renderer) render(order []string, result map[string][]PR) error {
 			if pr.Draft {
 				line += " " + r.paint("2", "[draft]")
 			}
+			if len(pr.Rules) > 0 {
+				line += " " + r.paint("2", "· rule "+strings.Join(pr.Rules, ", "))
+			}
 			writeln(line)
 			writeln("    " + r.paint("2;4", pr.URL))
 		}
 		writeln("")
 	}
 	return flush()
+}
+
+// renderActions lists rule actions: what would run, or with apply, what did.
+func (r renderer) renderActions(results []actionResult, apply bool) error {
+	if len(results) == 0 {
+		return nil
+	}
+	var b strings.Builder
+	title := "⚙ Rule actions (dry run)"
+	if apply {
+		title = "⚙ Rule actions"
+	}
+	b.WriteString(r.paint("1;34", title) + "\n")
+
+	refWidth := 0
+	for _, res := range results {
+		refWidth = max(refWidth, text.DisplayWidth(ref(res.PR)))
+	}
+	for _, res := range results {
+		var mark, what, color string
+		switch {
+		case res.Err != nil:
+			mark, what, color = "✘", res.Action+": "+res.Err.Error(), "31"
+		case res.Skip != "":
+			mark, what, color = "–", res.Action+" skipped: "+res.Skip, "2"
+		case res.Done != "":
+			mark, what, color = "✔", res.Done, "32"
+		default:
+			mark, what, color = "•", "would "+res.Action, ""
+			if res.Action == actionAutoMerge {
+				what += " (" + res.MergeMethod + ")"
+			}
+		}
+		origin := res.Rule
+		if res.Source != "" {
+			origin += ", " + res.Source
+		}
+		b.WriteString("  " + r.paint(color, mark) + " " + r.paint("1", text.PadRight(refWidth, ref(res.PR))) +
+			"  " + r.paint(color, what) + "  " + r.paint("2", "("+origin+")") + "\n")
+	}
+	if !apply {
+		b.WriteString(r.paint("2", "  Run with --apply to perform these actions.") + "\n")
+	}
+	_, err := io.WriteString(r.w, b.String())
+	return err
 }
 
 // truncate shortens s to width display columns, marking the cut with a

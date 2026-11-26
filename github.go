@@ -28,6 +28,7 @@ const detailQuery = `
 query($ids: [ID!]!) {
   nodes(ids: $ids) {
     ... on PullRequest {
+      id
       number
       title
       url
@@ -37,6 +38,9 @@ query($ids: [ID!]!) {
       repository { nameWithOwner }
       reviewDecision
       mergeable
+      headRefOid
+      autoMergeRequest { enabledAt }
+      viewerLatestReview { state }
       reviewRequests(first: 20) {
         nodes {
           requestedReviewer {
@@ -85,8 +89,9 @@ type login struct {
 	Login string `json:"login"`
 }
 
-// prNode mirrors a PullRequest node from searchQuery.
+// prNode mirrors a PullRequest node from detailQuery.
 type prNode struct {
+	ID        string    `json:"id"`
 	Number    int       `json:"number"`
 	Title     string    `json:"title"`
 	URL       string    `json:"url"`
@@ -100,6 +105,15 @@ type prNode struct {
 
 	ReviewDecision string `json:"reviewDecision"`
 	Mergeable      string `json:"mergeable"`
+	HeadRefOid     string `json:"headRefOid"`
+
+	AutoMergeRequest *struct {
+		EnabledAt time.Time `json:"enabledAt"`
+	} `json:"autoMergeRequest"`
+
+	ViewerLatestReview *struct {
+		State string `json:"state"`
+	} `json:"viewerLatestReview"`
 
 	ReviewRequests struct {
 		Nodes []struct {
@@ -232,12 +246,11 @@ func (f *fetcher) searchPRs(ctx context.Context, q string) ([]prNode, error) {
 // GraphQL timeout: a 502/504, or a 200 with an empty or truncated body
 // (surfacing as "unexpected end of JSON input").
 func (f *fetcher) do(ctx context.Context, query string, vars map[string]interface{}, resp interface{}) error {
-	select {
-	case f.sem <- struct{}{}:
-		defer func() { <-f.sem }()
-	case <-ctx.Done():
-		return context.Cause(ctx)
+	release, err := f.acquire(ctx)
+	if err != nil {
+		return err
 	}
+	defer release()
 
 	const attempts = 3
 	backoff := time.Second
@@ -253,6 +266,27 @@ func (f *fetcher) do(ctx context.Context, query string, vars map[string]interfac
 		}
 		backoff *= 2
 	}
+}
+
+// acquire takes a slot from the concurrency limit.
+func (f *fetcher) acquire(ctx context.Context) (release func(), err error) {
+	select {
+	case f.sem <- struct{}{}:
+		return func() { <-f.sem }, nil
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
+	}
+}
+
+// mutate runs one GraphQL mutation without retrying: a timed-out request may
+// still have gone through, and retrying could post a second review.
+func (f *fetcher) mutate(ctx context.Context, query string, vars map[string]interface{}) error {
+	release, err := f.acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return f.client.DoWithContext(ctx, query, vars, &struct{}{})
 }
 
 func retryable(err error) bool {

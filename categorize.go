@@ -50,6 +50,13 @@ type PR struct {
 	UnresolvedThreads  int       `json:"unresolvedThreads"`
 	CIState            enum      `json:"ciState"`
 	FailingChecks      []string  `json:"failingChecks"`
+	AutoMerge          bool      `json:"autoMerge"`
+	Rules              []string  `json:"rules"`
+	Actions            []string  `json:"actions"`
+
+	ID             string `json:"-"`
+	HeadSHA        string `json:"-"`
+	ViewerApproved bool   `json:"-"`
 }
 
 func summarize(n prNode) PR {
@@ -67,6 +74,12 @@ func summarize(n prNode) PR {
 		ChangesRequestedBy: []string{},
 		PendingReviewers:   []string{},
 		FailingChecks:      []string{},
+		AutoMerge:          n.AutoMergeRequest != nil,
+		Rules:              []string{},
+		Actions:            []string{},
+		ID:                 n.ID,
+		HeadSHA:            n.HeadRefOid,
+		ViewerApproved:     n.ViewerLatestReview != nil && n.ViewerLatestReview.State == "APPROVED",
 	}
 	if n.Author != nil {
 		pr.Author = n.Author.Login

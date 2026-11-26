@@ -127,7 +127,7 @@ func TestCategorizeOnlyRequestedSections(t *testing.T) {
 }
 
 func TestParseFlagsSections(t *testing.T) {
-	opts, err := parseFlags([]string{"-s", "requested,failing"})
+	opts, err := parseArgs(t, config{}, "-s", "requested,failing")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestParseFlagsSections(t *testing.T) {
 	if !opts.reviews {
 		t.Error("requesting the requested section should enable the review search")
 	}
-	if _, err := parseFlags([]string{"-s", "bogus"}); err == nil {
+	if _, err := parseArgs(t, config{}, "-s", "bogus"); err == nil {
 		t.Error("expected an error for an unknown section")
 	}
 }
