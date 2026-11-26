@@ -99,6 +99,7 @@ gh extension remove attention
 
 ```text
 gh attention [flags]
+gh attention skill [install]
 ```
 
 | Flag                     | Description                                    |
@@ -291,6 +292,32 @@ commits can't act on PRs elsewhere. The file also can't set `orgs`, `repos` or
 `all`, which would widen the search your own rules run over. The actions report
 names the file each rule came from.
 
+## Agent skill
+
+gh-attention ships an agent skill (a `SKILL.md` file, as used by Claude Code
+and GitHub Copilot) that teaches a coding agent how to use it:
+
+- the command to run
+- what each section and JSON field means
+- when to pass `--apply`, which is only when you ask
+
+The skill is built into the binary, so it always describes the flags that
+version has.
+
+```sh
+gh attention skill                                         # print SKILL.md
+gh attention skill install                                 # ~/.claude/skills/gh-attention
+gh attention skill install --dir .github/skills/gh-attention   # another agent's skills folder
+```
+
+`install` won't overwrite a `SKILL.md` it didn't write, so a skill you wrote
+yourself is safe. Pass `--force` to replace it. Re-run `install` after
+`gh extension upgrade attention` to pick up the new version's skill.
+
+To customize how your agent reports results, such as a summary table, keep that
+in a separate skill of your own that builds on this one, rather than editing
+the installed file.
+
 ## How it works
 
 gh-attention uses GitHub's GraphQL API in two steps:
@@ -414,16 +441,18 @@ touches `CHANGELOG.md` and `.release-please-manifest.json`.
 To force a specific version, add a `Release-As: 1.0.0` line to a commit
 message body on `main`.
 
-| File            | Purpose                                                              |
-| --------------- | -------------------------------------------------------------------- |
-| `main.go`       | Flag parsing, merging config with flags, and the concurrent searches |
-| `config.go`     | Loading, validating and layering the config files                    |
-| `github.go`     | GraphQL queries, batching, concurrency limit and retries             |
-| `categorize.go` | Flattening PRs and the rules that place them in sections             |
-| `rules.go`      | Matching config rules to PRs and planning and running their actions  |
-| `actions.go`    | The GitHub calls behind rule actions                                 |
-| `render.go`     | Terminal output                                                      |
-| `*_test.go`     | Unit tests for each of the above                                     |
+| File             | Purpose                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `main.go`        | Flag parsing, merging config with flags, and the concurrent searches                                         |
+| `config.go`      | Loading, validating and layering the config files                                                            |
+| `github.go`      | GraphQL queries, batching, concurrency limit and retries                                                     |
+| `categorize.go`  | Flattening PRs and the rules that place them in sections                                                     |
+| `rules.go`       | Matching config rules to PRs and planning and running their actions                                          |
+| `actions.go`     | The GitHub calls behind rule actions                                                                         |
+| `render.go`      | Terminal output                                                                                              |
+| `skill.go`       | `gh attention skill`: printing and installing the agent skill                                                |
+| `skill/SKILL.md` | The agent skill, embedded in the binary; tests check it against the flags, sections, actions and JSON fields |
+| `*_test.go`      | Unit tests for each of the above                                                                             |
 
 ## License
 

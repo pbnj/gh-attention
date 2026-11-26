@@ -25,6 +25,7 @@ const usage = `List open pull requests that need your attention.
 
 USAGE
   gh attention [flags]
+  gh attention skill [install]   Print or install the agent skill
 
 FLAGS
 %s
@@ -68,6 +69,9 @@ func main() {
 }
 
 func run(args []string) error {
+	if len(args) > 0 && args[0] == "skill" {
+		return runSkill(args[1:], os.Stdout, os.UserHomeDir)
+	}
 	opts, fs, err := parseFlags(args)
 	if err != nil {
 		return err
