@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/pbnj/gh-attention/compare/v0.3.0...v0.3.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* **skill:** run inside a repo's checkout to load its rules ([4c5ed51](https://github.com/pbnj/gh-attention/commit/4c5ed51f4c556cef04f1af2a28a7bd88b23bb829))
+
 ## [0.3.0](https://github.com/pbnj/gh-attention/compare/v0.2.0...v0.3.0) (2026-11-26)
 
 
