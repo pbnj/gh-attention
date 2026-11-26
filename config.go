@@ -42,6 +42,7 @@ type rule struct {
 	Match   struct {
 		Authors []string `yaml:"authors"`
 		Repos   []string `yaml:"repos"`
+		Titles  []string `yaml:"titles"`
 	} `yaml:"match"`
 	Actions     []string `yaml:"actions"`
 	MergeMethod string   `yaml:"merge_method"`
@@ -149,6 +150,11 @@ func (r rule) validate() error {
 	for _, p := range append(slices.Clone(r.Match.Authors), r.Match.Repos...) {
 		if _, err := path.Match(p, ""); err != nil {
 			return fmt.Errorf("bad pattern %q: %w", p, err)
+		}
+	}
+	for _, p := range r.Match.Titles {
+		if _, err := titleRegexp(p); err != nil {
+			return fmt.Errorf("bad title pattern %q: %w", p, err)
 		}
 	}
 	return nil

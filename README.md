@@ -271,6 +271,7 @@ gh attention --apply    # runs them
 | `section`       | The section whose PRs the rule looks at. Rules only see sections that are shown, so `-s failing` skips a `requested` rule.      |
 | `match.authors` | PR author globs, case-insensitive. `dependabot`, `app/dependabot` and `dependabot[bot]` are the same. Required for `requested`. |
 | `match.repos`   | Optional `OWNER/REPO` globs, such as `octo-org/*`.                                                                              |
+| `match.titles`  | Optional PR title globs, case-insensitive. `*` matches any text, including `/`, and `?` one character: `chore(deps): bump *`.   |
 | `actions`       | Any of `approve-workflows`, `approve` and `auto-merge`. They run in that order, whatever order you list them in.                |
 | `merge_method`  | `merge`, `squash` (default) or `rebase`, used by `auto-merge`.                                                                  |
 

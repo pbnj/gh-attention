@@ -39,6 +39,31 @@ func TestRuleMatches(t *testing.T) {
 	}
 }
 
+func TestRuleMatchesTitles(t *testing.T) {
+	r := rule{Section: sectionRequested}
+	r.Match.Authors = []string{"github-actions"}
+	r.Match.Titles = []string{"chore: roll Wolfi package pins forward*", "exact?title"}
+	for _, tt := range []struct {
+		title string
+		want  bool
+	}{
+		{"chore: roll Wolfi package pins forward for nodejs/24", true}, // * spans the slash
+		{"CHORE: Roll wolfi package pins forward", true},               // case-insensitive
+		{"exactXtitle", true},
+		{"exact title (x)", false},
+		{"fix: roll Wolfi package pins forward", false},
+		{"chore: roll Wolfi package pins", false},
+	} {
+		if got := r.matches(PR{Author: "app/github-actions", Title: tt.title}); got != tt.want {
+			t.Errorf("matches(%q) = %v, want %v", tt.title, got, tt.want)
+		}
+	}
+	// Regexp metacharacters in a pattern are literal.
+	if titleGlob("deps (major) [x]", "deps (major) [x]") != true || titleGlob("a.c", "abc") {
+		t.Error("regexp metacharacters should match literally")
+	}
+}
+
 func TestPlanActions(t *testing.T) {
 	result := map[string][]PR{
 		sectionRequested: {

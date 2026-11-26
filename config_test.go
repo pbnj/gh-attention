@@ -177,6 +177,17 @@ func TestRepoConfigCantWidenScope(t *testing.T) {
 	}
 }
 
+func TestParseConfigTitles(t *testing.T) {
+	raw := `rules: [{section: requested, match: {authors: [github-actions], titles: ["chore: roll*"]}, actions: [approve]}]`
+	c, err := parseConfig([]byte(raw), "cfg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(c.Rules[0].Match.Titles, []string{"chore: roll*"}) {
+		t.Errorf("titles = %v", c.Rules[0].Match.Titles)
+	}
+}
+
 func TestRuleNameControlCharacters(t *testing.T) {
 	raw := "rules: [{name: \"evil\\e[2J\", section: approved, actions: [auto-merge]}]"
 	if _, err := parseConfig([]byte(raw), "cfg"); err == nil {

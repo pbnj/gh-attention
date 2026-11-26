@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -66,7 +67,25 @@ func (r rule) matches(pr PR) bool {
 	if len(r.Match.Repos) > 0 && !globAny(r.Match.Repos, pr.Repo, strings.ToLower) {
 		return false
 	}
+	if len(r.Match.Titles) > 0 && !slices.ContainsFunc(r.Match.Titles, func(p string) bool { return titleGlob(p, pr.Title) }) {
+		return false
+	}
 	return true
+}
+
+// titleRegexp compiles a title glob: * matches any run of characters,
+// slashes included (unlike path.Match, since titles often hold paths), ? one
+// character, case-insensitively.
+func titleRegexp(pattern string) (*regexp.Regexp, error) {
+	quoted := regexp.QuoteMeta(pattern)
+	quoted = strings.ReplaceAll(quoted, `\*`, `.*`)
+	quoted = strings.ReplaceAll(quoted, `\?`, `.`)
+	return regexp.Compile(`(?is)^` + quoted + `$`)
+}
+
+func titleGlob(pattern, title string) bool {
+	re, err := titleRegexp(pattern)
+	return err == nil && re.MatchString(title)
 }
 
 // planActions matches rules against the categorized PRs, records the rule
