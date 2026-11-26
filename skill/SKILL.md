@@ -46,6 +46,26 @@ The user's config, `~/.config/gh-attention/config.yaml`, can hold rules that run
 actions on matching PRs. A repository's `.github/attention.yaml` can add rules
 for that repository only.
 
+### Where to run
+
+A repository's rules load **only when `gh attention` runs inside a checkout of
+that repository**. The user's own config loads everywhere. Each run sees the
+rules of at most one repository: the checkout it runs in.
+
+- To list PRs, run from anywhere.
+- To run rules, or show them in a dry run, for PRs in a repository that has a
+  `.github/attention.yaml`, run inside the user's local checkout of it. `-A`
+  still searches every repository, and that checkout's rules apply to its PRs:
+
+  ```bash
+  cd <checkout> && gh attention -A --no-drafts --json [--apply]
+  ```
+
+- Several such repositories mean one run per checkout. Add `-R OWNER/REPO` to
+  each run so it only fetches that repository's PRs, and merge the results.
+- If there's no local checkout, say the repository's rules can't run, and ask
+  the user where the checkout is rather than cloning it unasked.
+
 Actions (in run order): `approve-workflows`, `approve`, `auto-merge`
 
 - Without `--apply`, rules only plan. `rules` and `actions` on each PR name
