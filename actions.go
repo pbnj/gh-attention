@@ -20,6 +20,11 @@ mutation($id: ID!, $method: PullRequestMergeMethod!) {
   enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: $method}) { clientMutationId }
 }`
 
+const mergeMutation = `
+mutation($id: ID!, $method: PullRequestMergeMethod!) {
+  mergePullRequest(input: {pullRequestId: $id, mergeMethod: $method}) { clientMutationId }
+}`
+
 // githubActor runs rule actions: GraphQL for reviews and auto-merge, REST
 // for workflow runs, which GraphQL doesn't expose.
 type githubActor struct {
@@ -31,10 +36,25 @@ func (g githubActor) approve(ctx context.Context, pr PR) error {
 	return g.f.mutate(ctx, approveMutation, map[string]interface{}{"id": pr.ID})
 }
 
-func (g githubActor) enableAutoMerge(ctx context.Context, pr PR, method string) error {
-	return g.f.mutate(ctx, autoMergeMutation, map[string]interface{}{
-		"id": pr.ID, "method": strings.ToUpper(method),
-	})
+// enableAutoMerge turns on auto-merge. GitHub refuses that for a PR that can
+// already merge, often because the rule's own approval just cleared its last
+// requirement, so it merges such a PR instead and reports merged.
+func (g githubActor) enableAutoMerge(ctx context.Context, pr PR, method string) (merged bool, err error) {
+	vars := map[string]interface{}{"id": pr.ID, "method": strings.ToUpper(method)}
+	err = g.f.mutate(ctx, autoMergeMutation, vars)
+	if !alreadyMergeable(err) {
+		return false, err
+	}
+	if err := g.f.mutate(ctx, mergeMutation, vars); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// alreadyMergeable reports whether enablePullRequestAutoMerge failed because
+// the PR is mergeable now ("Pull request is in clean status").
+func alreadyMergeable(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "is in clean status")
 }
 
 // maxWorkflowPages bounds approveWorkflows, in case approved runs keep
