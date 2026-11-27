@@ -108,9 +108,10 @@ func TestPlanActions(t *testing.T) {
 }
 
 type fakeActor struct {
-	runs  int
-	calls []string
-	fail  string
+	runs   int
+	merged bool
+	calls  []string
+	fail   string
 }
 
 func (f *fakeActor) do(name string) error {
@@ -124,8 +125,8 @@ func (f *fakeActor) approveWorkflows(_ context.Context, pr PR) (int, error) {
 	return f.runs, f.do(actionApproveWorkflows)
 }
 func (f *fakeActor) approve(context.Context, PR) error { return f.do(actionApprove) }
-func (f *fakeActor) enableAutoMerge(_ context.Context, _ PR, method string) error {
-	return f.do(actionAutoMerge + ":" + method)
+func (f *fakeActor) enableAutoMerge(_ context.Context, _ PR, method string) (bool, error) {
+	return f.merged, f.do(actionAutoMerge + ":" + method)
 }
 
 func TestExecute(t *testing.T) {
@@ -148,6 +149,30 @@ func TestExecute(t *testing.T) {
 	res = execute(context.Background(), &fakeActor{runs: 2}, plan[:1])
 	if res[0].Done != "approved 2 workflow runs" {
 		t.Errorf("Done = %q", res[0].Done)
+	}
+
+	res = execute(context.Background(), &fakeActor{}, plan[2:])
+	if res[0].Done != "enabled auto-merge (rebase)" {
+		t.Errorf("Done = %q", res[0].Done)
+	}
+	res = execute(context.Background(), &fakeActor{merged: true}, plan[2:])
+	if res[0].Done != "merged (rebase), already mergeable" {
+		t.Errorf("Done = %q", res[0].Done)
+	}
+}
+
+func TestAlreadyMergeable(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{nil, false},
+		{errors.New("GraphQL: Pull request Pull request is in clean status (enablePullRequestAutoMerge)"), true},
+		{errors.New("GraphQL: Auto merge is not allowed for this repository (enablePullRequestAutoMerge)"), false},
+	} {
+		if got := alreadyMergeable(tc.err); got != tc.want {
+			t.Errorf("alreadyMergeable(%v) = %v, want %v", tc.err, got, tc.want)
+		}
 	}
 }
 

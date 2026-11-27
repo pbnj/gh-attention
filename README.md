@@ -276,11 +276,11 @@ gh attention --apply    # runs them
 | `actions`       | Any of `approve-workflows`, `approve` and `auto-merge`. They run in that order, whatever order you list them in.                |
 | `merge_method`  | `merge`, `squash` (default) or `rebase`, used by `auto-merge`.                                                                  |
 
-| Action              | What it does                                                                                                     | Skipped when             |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| `approve-workflows` | Approves the head commit's workflow runs that are waiting for approval (`action_required`), so CI runs.          | No run is waiting        |
-| `approve`           | Submits an approving review. Only allowed in `requested`, because GitHub doesn't let you approve your own PRs.   | You've already approved  |
-| `auto-merge`        | Enables auto-merge, so GitHub merges the PR once its requirements are met. The repository must allow auto-merge. | Auto-merge is already on |
+| Action              | What it does                                                                                                                                                                                                  | Skipped when             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `approve-workflows` | Approves the head commit's workflow runs that are waiting for approval (`action_required`), so CI runs.                                                                                                       | No run is waiting        |
+| `approve`           | Submits an approving review. Only allowed in `requested`, because GitHub doesn't let you approve your own PRs.                                                                                                | You've already approved  |
+| `auto-merge`        | Enables auto-merge, so GitHub merges the PR once its requirements are met. The repository must allow auto-merge. If the PR can already merge, which GitHub won't enable auto-merge for, it merges the PR now. | Auto-merge is already on |
 
 Draft PRs never match a rule. When several rules name the same action for a PR,
 it runs once. A failed action doesn't stop the others; gh-attention exits with

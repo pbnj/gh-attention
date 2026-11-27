@@ -157,7 +157,7 @@ func skipReason(pr PR, action string) string {
 type actor interface {
 	approveWorkflows(ctx context.Context, pr PR) (int, error)
 	approve(ctx context.Context, pr PR) error
-	enableAutoMerge(ctx context.Context, pr PR, method string) error
+	enableAutoMerge(ctx context.Context, pr PR, method string) (merged bool, err error)
 }
 
 // execute runs every planned action that isn't skipped, carrying on after
@@ -182,8 +182,13 @@ func execute(ctx context.Context, a actor, plan []plannedAction) []actionResult 
 					res.Done = "approved"
 				}
 			case actionAutoMerge:
-				if res.Err = a.enableAutoMerge(ctx, p.PR, p.MergeMethod); res.Err == nil {
-					res.Done = "enabled auto-merge (" + p.MergeMethod + ")"
+				var merged bool
+				if merged, res.Err = a.enableAutoMerge(ctx, p.PR, p.MergeMethod); res.Err == nil {
+					if merged {
+						res.Done = "merged (" + p.MergeMethod + "), already mergeable"
+					} else {
+						res.Done = "enabled auto-merge (" + p.MergeMethod + ")"
+					}
 				}
 			}
 		}
