@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/pbnj/gh-attention/compare/v0.3.1...v0.3.2) (2026-11-27)
+
+
+### Bug Fixes
+
+* **rules:** merge a PR that is already mergeable instead of failing auto-merge ([#8](https://github.com/pbnj/gh-attention/issues/8)) ([e876918](https://github.com/pbnj/gh-attention/commit/e876918a9fc87df5ede25379561c21078e2f089b))
+
 ## [0.3.1](https://github.com/pbnj/gh-attention/compare/v0.3.0...v0.3.1) (2026-11-26)
 
 
